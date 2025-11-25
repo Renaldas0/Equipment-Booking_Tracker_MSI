@@ -6,52 +6,9 @@
     <title>Asset Tracker Dashboard</title>
     <script src="/assets/js/firebase.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Custom scrollbar for aesthetics */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-        
-        /* Simple transition for page content */
-        .page-content {
-            display: none;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-        .page-content.active {
-            display: block;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+    <link href="./assets/css/output.css" rel="stylesheet">
+    <style src="/assets/css/style.css"></style>
 
-        /* Modal styles */
-        .modal-backdrop {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 40;
-            animation: fadeIn 0.2s ease;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 50;
-            animation: modalIn 0.3s ease;
-        }
-        .modal.active, .modal-backdrop.active {
-            display: block;
-        }
-        @keyframes modalIn {
-            from { opacity: 0; transform: translate(-50%, -45%); }
-            to { opacity: 1; transform: translate(-50%, -50%); }
-        }
-    </style>
 </head>
 <body class="h-full flex antialiased font-sans text-slate-800">
 
@@ -371,22 +328,44 @@
         
         // --- CONSTANTS ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // --- TAILWIND STYLES ---
-        const tableHeaderStyles = "p-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider";
-        const tableCellStyles = "p-4 border-b border-slate-200 text-sm";
-        const formLabelStyles = "block text-sm font-medium text-slate-700 mb-1";
-        const formInputStyles = "block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm";
-        const btnPrimaryStyles = "bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200";
-        const btnSecondaryStyles = "bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2 px-4 rounded-lg border border-slate-300 shadow-sm transition duration-200";
-        const btnDangerStyles = "bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200";
-        const navLinkStyles = "flex items-center py-3 px-6 md:px-6 text-sm font-medium border-l-4 transition duration-200";
-        const activeNavStyles = "bg-indigo-50 text-indigo-600 border-indigo-400";
-        const inactiveNavStyles = "text-slate-600 hover:bg-slate-100 hover:text-slate-800 border-transparent";
+        // 2. Placeholder for Firebase Configuration
+        // NOTE: YOU MUST REPLACE THE VALUES BELOW WITH YOUR OWN FIREBASE CONFIGURATION.
+        // Get this config from your Firebase project console -> Project Settings.
+        let firebaseConfig = {
+            apiKey: "YOUR_API_KEY_HERE", 
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
         
-        // --- HELPER FUNCTIONS ---
+        // Check if the environment provided config exists (like in Canvas)
+        if (typeof __firebase_config !== 'undefined' && __firebase_config !== "") {
+            // Use the provided config if available
+            firebaseConfig = JSON.parse(__firebase_config);
+        } else if (firebaseConfig.apiKey === "YOUR_API_KEY_HERE") {
+             // If we are running locally and the user didn't update the keys, show an error.
+             document.body.innerHTML = `
+                <div class="p-10 bg-red-100 text-red-800 border-l-4 border-red-500 m-8 rounded-lg shadow-lg">
+                    <h1 class="text-2xl font-bold mb-4">Authentication Error: Missing Firebase Credentials</h1>
+                    <p class="mb-4">This application requires a connection to a Firebase project to save and load data. Since you are running it locally:</p>
+                    <ol class="list-decimal list-inside space-y-1">
+                        <li>Go to your Firebase Console and create a new project.</li>
+                        <li>In your project settings, find the "Add app" section and choose "Web".</li>
+                        <li>Copy the config object (e.g., <code>{ apiKey: "...", projectId: "..." }</code>).</li>
+                        <li>**PASTE** that config object into the <code>firebaseConfig</code> variable inside the <code>&lt;script&gt;</code> tag of this HTML file.</li>
+                    </ol>
+                    <p class="mt-4">Once updated, reload the page. It will automatically sign you in anonymously.</p>
+                </div>
+            `;
+            console.error("Firebase API Key is missing. Please update firebaseConfig.");
+            return; 
+        }
+
+        // The custom token is used by the environment, but ignored for local development
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
         /**
          * Applies Tailwind classes to elements.
