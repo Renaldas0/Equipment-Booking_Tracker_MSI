@@ -1,9 +1,0 @@
-const firebaseConfig = {
-  apiKey: "AIzaSyBq0PvSp-00mcbHhWtiCDK9SCtGDVikTL4",
-  authDomain: "msi-tracker.firebaseapp.com",
-  projectId: "msi-tracker",
-  storageBucket: "msi-tracker.firebasestorage.app",
-  messagingSenderId: "486848526130",
-  appId: "1:486848526130:web:1fced54f6baa99aa91092b",
-  measurementId: "G-2B53VF2S75"
-};

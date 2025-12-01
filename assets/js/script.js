@@ -1,95 +1,97 @@
-// Initialize Firebase
-
-var admin = require("firebase-admin");
-
-var serviceAccount = require("path/to/serviceAccountKey.json");
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getAuth, 
-            signInAnonymously, 
-            signInWithCustomToken, 
-            onAuthStateChanged 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            getDoc, 
-            addDoc, 
-            setDoc, 
-            updateDoc, 
-            deleteDoc, 
-            onSnapshot, 
-            collection, 
-            query, 
-            where, 
-            getDocs,
-            Timestamp,
-            setLogLevel
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
         // --- GLOBAL STATE ---
-        let db, auth;
-        let userId, userName;
+        let userId; 
+        let userName = "Local User"; // Default user name for logs/bookings
         let currentBookingDate = new Date();
         
+        // Data is stored in these global arrays after loading from localStorage
         let allEquipment = [];
         let allBookings = [];
         let allLogs = [];
+        
+        const LOCAL_STORAGE_KEY = 'local_asset_data_v1';
+        
+        // --- TAILWIND STYLES (Simplified for clarity) ---
+        const tableHeaderStyles = "p-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider";
+        const tableCellStyles = "p-4 border-b border-slate-200 text-sm";
+        const formLabelStyles = "block text-sm font-medium text-slate-700 mb-1";
+        const formInputStyles = "block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm";
+        const btnPrimaryStyles = "bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200";
+        const btnSecondaryStyles = "bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2 px-4 rounded-lg border border-slate-300 shadow-sm transition duration-200";
+        const btnDangerStyles = "bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200";
+        const navLinkStyles = "flex items-center py-3 px-6 md:px-6 text-sm font-medium border-l-4 transition duration-200";
+        const activeNavStyles = "bg-indigo-50 text-indigo-600 border-indigo-400";
+        const inactiveNavStyles = "text-slate-600 hover:bg-slate-100 hover:text-slate-800 border-transparent";
+        
+        // --- AUTH/USER ID REPLACEMENT ---
 
-        // Collection Refs
-        let equipmentCol, bookingsCol, logsCol;
-        
-        // Unsubscribe functions for snapshot listeners
-        let unsubEquipment, unsubBookings, unsubLogs;
-        
-        // --- CONSTANTS ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        // 2. Placeholder for Firebase Configuration
-        // NOTE: YOU MUST REPLACE THE VALUES BELOW WITH YOUR OWN FIREBASE CONFIGURATION.
-        // Get this config from your Firebase project console -> Project Settings.
-        let firebaseConfig = {
-            apiKey: "AIzaSyBq0PvSp-00mcbHhWtiCDK9SCtGDVikTL4", 
-            authDomain: "msi-tracker.firebaseapp.com",
-            projectId: "msi-tracker",
-            storageBucket: "msi-tracker.firebasestorage.app",
-            messagingSenderId: "486848526130",
-            appId: "1:486848526130:web:1fced54f6baa99aa91092b"
-        };
-        
-        // Check if the environment provided config exists (like in Canvas)
-        if (typeof __firebase_config !== 'undefined' && __firebase_config !== "") {
-            // Use the provided config if available
-            firebaseConfig = JSON.parse(__firebase_config);
-        } else if (firebaseConfig.apiKey === "AIzaSyBq0PvSp-00mcbHhWtiCDK9SCtGDVikTL4") {
-             // If we are running locally and the user didn't update the keys, show an error.
-             document.body.innerHTML = `
-                <div class="p-10 bg-red-100 text-red-800 border-l-4 border-red-500 m-8 rounded-lg shadow-lg">
-                    <h1 class="text-2xl font-bold mb-4">Authentication Error: Missing Firebase Credentials</h1>
-                    <p class="mb-4">This application requires a connection to a Firebase project to save and load data. Since you are running it locally:</p>
-                    <ol class="list-decimal list-inside space-y-1">
-                        <li>Go to your Firebase Console and create a new project.</li>
-                        <li>In your project settings, find the "Add app" section and choose "Web".</li>
-                        <li>Copy the config object (e.g., <code>{ apiKey: "...", projectId: "..." }</code>).</li>
-                        <li>**PASTE** that config object into the <code>firebaseConfig</code> variable inside the <code>&lt;script&gt;</code> tag of this HTML file.</li>
-                    </ol>
-                    <p class="mt-4">Once updated, reload the page. It will automatically sign you in anonymously.</p>
-                </div>
-            `;
-            console.error("Firebase API Key is missing. Please update firebaseConfig.");
-            return; 
+        /**
+         * Gets or creates a persistent local user ID.
+         */
+        function getLocalUserId() {
+            let id = localStorage.getItem('local_user_id');
+            if (!id) {
+                // Generate a simple unique ID
+                id = 'user-' + Math.random().toString(36).substring(2, 10);
+                localStorage.setItem('local_user_id', id);
+            }
+            userId = id;
+            document.getElementById('userIdDisplay').textContent = userId;
         }
 
-        // The custom token is used by the environment, but ignored for local development
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // --- PERSISTENCE LAYER (Local Storage) ---
+
+        /**
+         * Loads all data from localStorage into global arrays.
+         */
+        function loadData() {
+            const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (storedData) {
+                const data = JSON.parse(storedData);
+                allEquipment = data.equipment || [];
+                allBookings = data.bookings || [];
+                allLogs = data.logs || [];
+            } else {
+                allEquipment = [];
+                allBookings = [];
+                allLogs = [];
+            }
+        }
+
+        /**
+         * Saves all global arrays back to localStorage.
+         */
+        function saveData() {
+            const dataToStore = {
+                equipment: allEquipment,
+                bookings: allBookings,
+                logs: allLogs
+            };
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dataToStore));
+            } catch (e) {
+                console.error("Error saving to localStorage:", e);
+                showToast("Error saving data locally. Storage may be full.", true);
+            }
+        }
+        
+        /**
+         * Re-renders all UI components after a data change.
+         */
+        function reloadDataAndRender() {
+            loadData();
+            
+            // Sort data immediately after loading
+            allEquipment.sort((a, b) => a.name.localeCompare(b.name));
+            allBookings.sort((a, b) => a.startTime - b.startTime);
+            allLogs.sort((a, b) => b.timestamp - a.timestamp); // Newest first
+            
+            renderEquipmentTable();
+            renderLogsTable();
+            renderBookingSchedule();
+            renderDashboardStats();
+        }
+
+        // --- HELPER FUNCTIONS ---
         
         /**
          * Applies Tailwind classes to elements.
@@ -112,13 +114,13 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
         }
 
         /**
-         * Formats a Firestore Timestamp or Date object to a readable string
-         * @param {Timestamp|Date} ts - The timestamp
+         * Formats a Unix timestamp (ms) to a readable string
+         * @param {number} ts - The Unix timestamp in milliseconds
          * @returns {string} Formatted date/time
          */
         function formatTimestamp(ts) {
             if (!ts) return "N/A";
-            const date = ts.toDate ? ts.toDate() : ts;
+            const date = new Date(ts);
             return date.toLocaleString('en-US', { 
                 month: 'short', 
                 day: 'numeric', 
@@ -202,18 +204,17 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
          * Creates a new log entry
          * @param {string} activityType - Description of the activity
          */
-        async function createLogEntry(activityType) {
-            if (!logsCol) return;
-            try {
-                await addDoc(logsCol, {
-                    timestamp: Timestamp.now(),
-                    userId: userId,
-                    activityType: activityType,
-                    ipAddress: "N/A (Client-side)"
-                });
-            } catch (error) {
-                console.error("Error creating log entry:", error);
-            }
+        function createLogEntry(activityType) {
+            allLogs.unshift({ // Add to the start of the array
+                id: 'log-' + Date.now(),
+                timestamp: Date.now(),
+                userId: userId,
+                activityType: activityType,
+                ipAddress: "N/A (Local)"
+            });
+            saveData();
+            renderLogsTable();
+            renderDashboardStats();
         }
         
         // --- PAGE NAVIGATION ---
@@ -331,13 +332,13 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 
             // Recent activity
             const activityList = document.getElementById('recent-activity-list');
-            const sortedLogs = [...allLogs].reverse(); // Already sorted by timestamp
-            if (sortedLogs.length === 0) {
+            
+            if (allLogs.length === 0) {
                 activityList.innerHTML = `<li class="text-center text-slate-500 py-4">No recent activity.</li>`;
                 return;
             }
             
-            activityList.innerHTML = sortedLogs.slice(0, 5).map(log => `
+            activityList.innerHTML = allLogs.slice(0, 5).map(log => `
                 <li class="flex items-center space-x-4">
                     <div class="p-2 bg-slate-100 rounded-full">
                         <span class="text-lg">
@@ -363,24 +364,25 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 
             const bookingsForResource = allBookings
                 .filter(b => b.resourceId === resourceId)
-                .map(b => ({ ...b, startTime: b.startTime.toDate(), endTime: b.endTime.toDate() }));
+                .map(b => ({ ...b, startTime: new Date(b.startTime), endTime: new Date(b.endTime) }));
 
-            const currentBooking = bookingsForResource.find(b => now >= b.startTime && now < b.endTime);
+            const nowMs = now.getTime();
+            const currentBooking = bookingsForResource.find(b => nowMs >= b.startTime.getTime() && nowMs < b.endTime.getTime());
             
             if (currentBooking) {
                 statusEl.textContent = "Booked";
                 statusEl.className = "text-xl font-semibold mt-2 text-red-600";
-                nextEl.textContent = `Until ${formatTimestamp(currentBooking.endTime)} by ${currentBooking.bookerName}`;
+                nextEl.textContent = `Until ${formatTimestamp(currentBooking.endTime.getTime())} by ${currentBooking.bookerName}`;
             } else {
                 statusEl.textContent = "Available";
                 statusEl.className = "text-xl font-semibold mt-2 text-green-600";
                 
                 const nextBooking = bookingsForResource
-                    .filter(b => b.startTime > now)
-                    .sort((a, b) => a.startTime - b.startTime)[0];
+                    .filter(b => b.startTime.getTime() > nowMs)
+                    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())[0];
                     
                 if (nextBooking) {
-                    nextEl.textContent = `Next: ${formatTimestamp(nextBooking.startTime)} by ${nextBooking.bookerName}`;
+                    nextEl.textContent = `Next: ${formatTimestamp(nextBooking.startTime.getTime())} by ${nextBooking.bookerName}`;
                 } else {
                     nextEl.textContent = "No upcoming bookings";
                 }
@@ -406,11 +408,11 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
             dayEnd.setHours(18, 0, 0, 0); // 6:00 PM (18:00)
 
             // Get bookings for the selected day
-            const startOfDay = Timestamp.fromDate(dayStart);
-            const endOfDay = Timestamp.fromDate(dayEnd);
+            const startOfDayMs = dayStart.getTime();
+            const endOfDayMs = dayEnd.getTime();
             
             const dayBookings = allBookings.filter(b => {
-                return b.startTime >= startOfDay && b.startTime < endOfDay;
+                return b.startTime >= startOfDayMs && b.startTime < endOfDayMs;
             });
             
             const bookings1 = dayBookings.filter(b => b.resourceId === 'Computer-1');
@@ -430,13 +432,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
             const timeStart = new Date(currentBookingDate);
             timeStart.setHours(hour, 0, 0, 0);
             
-            const timeEnd = new Date(currentBookingDate);
-            timeEnd.setHours(hour + 1, 0, 0, 0);
-            
             const timeLabel = timeStart.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
             
             // Check for booking in this slot
-            const booking = bookings.find(b => b.startTime.toDate().getHours() === hour);
+            const booking = bookings.find(b => new Date(b.startTime).getHours() === hour);
             
             if (booking) {
                 slot.className = "p-3 bg-red-100 border border-red-200 rounded-lg text-red-800";
@@ -449,53 +448,12 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
                 slot.className = "p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 flex justify-between items-center";
                 slot.innerHTML = `
                     <p class="font-semibold">${timeLabel}</p>
-                    <button class="btn-book-slot btn-primary !py-1 !px-3 !text-sm" data-resource="${resourceId}" data-time="${hour}">Book</button>
+                    <button class="btn-book-slot hover:bg-green-100 rounded-lg btn-primary !py-1 !px-3 !text-sm" data-resource="${resourceId}" data-time="${hour}">Book</button>
                 `;
             }
             return slot;
         }
 
-        // --- FIRESTORE OPERATIONS ---
-        
-        /**
-         * Initializes all snapshot listeners
-         */
-        function initSnapshotListeners() {
-            // Ensure listeners are only attached once
-            if (unsubEquipment) unsubEquipment();
-            if (unsubBookings) unsubBookings();
-            if (unsubLogs) unsubLogs();
-            
-            // Equipment Listener
-            equipmentCol = collection(db, `/artifacts/${appId}/public/data/equipment`);
-            unsubEquipment = onSnapshot(equipmentCol, (snapshot) => {
-                allEquipment = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                allEquipment.sort((a, b) => a.name.localeCompare(b.name));
-                renderEquipmentTable();
-                renderDashboardStats();
-            }, (error) => console.error("Error listening to equipment:", error));
-            
-            // Bookings Listener
-            bookingsCol = collection(db, `/artifacts/${appId}/public/data/bookings`);
-            unsubBookings = onSnapshot(bookingsCol, (snapshot) => {
-                allBookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                allBookings.sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis());
-                renderBookingSchedule();
-                renderDashboardStats();
-            }, (error) => console.error("Error listening to bookings:", error));
-            
-            // Logs Listener
-            logsCol = collection(db, `/artifacts/${appId}/public/data/userlogs`); 
-            // NOTE: In production, this should be /private/data/userlogs and secured with rules
-            const logsQuery = query(collection(db, `/artifacts/${appId}/public/data/userlogs`), where("timestamp", "<=", Timestamp.now())); // Simple query
-            unsubLogs = onSnapshot(logsQuery, (snapshot) => {
-                allLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                allLogs.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis()); // Newest first
-                renderLogsTable();
-                renderDashboardStats();
-            }, (error) => console.error("Error listening to logs:", error));
-        }
-        
         // --- EVENT HANDLERS ---
         
         /**
@@ -508,29 +466,27 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
                     const name = e.currentTarget.dataset.name;
                     document.getElementById('assignEquipmentId').value = id;
                     document.getElementById('assignItemName').textContent = name;
-                    document.getElementById('assigneeName').value = userName || ''; // Pre-fill if current user name is known
+                    document.getElementById('assigneeName').value = userName; // Pre-fill with local name
                     openModal('assignModal');
                 };
             });
             
             document.querySelectorAll('.btn-return').forEach(btn => {
-                btn.onclick = async (e) => {
+                btn.onclick = (e) => {
                     const id = e.currentTarget.dataset.id;
                     if (confirm("Are you sure you want to return this item?")) {
-                        const itemDoc = doc(db, `/artifacts/${appId}/public/data/equipment`, id);
-                        const item = allEquipment.find(i => i.id === id);
-                        try {
-                            await updateDoc(itemDoc, {
-                                status: "Available",
-                                assigneeName: null,
-                                assigneeId: null,
-                                lastCheckedOut: null
-                            });
-                            await createLogEntry(`Returned item: ${item.name} (SN: ${item.serialNumber})`);
+                        const itemIndex = allEquipment.findIndex(i => i.id === id);
+                        if (itemIndex > -1) {
+                            const item = allEquipment[itemIndex];
+                            item.status = "Available";
+                            item.assigneeName = null;
+                            item.assigneeId = null;
+                            item.lastCheckedOut = null;
+                            
+                            saveData();
+                            createLogEntry(`Returned item: ${item.name} (SN: ${item.serialNumber})`);
                             showToast("Item returned successfully.");
-                        } catch (error) {
-                            console.error("Error returning item:", error);
-                            showToast("Error returning item.", true);
+                            reloadDataAndRender();
                         }
                     }
                 };
@@ -557,55 +513,54 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
          * Attaches listeners for the Booking schedule (book slot, delete booking)
          */
         function attachBookingScheduleListeners() {
-            document.getElementById('computer-1-schedule').addEventListener('click', handleBookingClick);
-            document.getElementById('computer-2-schedule').addEventListener('click', handleBookingClick);
-        }
-        
-        function handleBookingClick(e) {
             // Book new slot
-            if (e.target.classList.contains('btn-book-slot')) {
-                const resource = e.target.dataset.resource;
-                const hour = parseInt(e.target.dataset.time, 10);
-                
-                const startTime = new Date(currentBookingDate);
-                startTime.setHours(hour, 0, 0, 0);
-                
-                const endTime = new Date(currentBookingDate);
-                endTime.setHours(hour + 1, 0, 0, 0);
+            document.querySelectorAll('.btn-book-slot').forEach(btn => {
+                btn.onclick = (e) => {
+                    const resource = e.target.dataset.resource;
+                    const hour = parseInt(e.target.dataset.time, 10);
+                    
+                    const startTime = new Date(currentBookingDate);
+                    startTime.setHours(hour, 0, 0, 0);
+                    
+                    const endTime = new Date(currentBookingDate);
+                    endTime.setHours(hour + 1, 0, 0, 0);
 
-                document.getElementById('bookingResource').value = resource;
-                document.getElementById('bookingDate').value = formatDateForInput(startTime);
-                document.getElementById('bookingStartTime').value = formatTimeForInput(startTime);
-                document.getElementById('bookingEndTime').value = formatTimeForInput(endTime);
-                
-                openModal('bookingModal');
-            }
+                    document.getElementById('bookingResource').value = resource;
+                    document.getElementById('bookingDate').value = formatDateForInput(startTime);
+                    document.getElementById('bookingStartTime').value = formatTimeForInput(startTime);
+                    document.getElementById('bookingEndTime').value = formatTimeForInput(endTime);
+                    
+                    openModal('bookingModal');
+                };
+            });
             
             // Delete existing booking
-            if (e.target.classList.contains('btn-delete-booking')) {
-                const id = e.target.dataset.id;
-                const booking = allBookings.find(b => b.id === id);
-                
-                // Only allow booker or admin (simplified check)
-                if (booking.bookerId === userId) {
-                    if (confirm("Are you sure you want to delete this booking?")) {
-                        deleteBooking(id, booking);
+            document.querySelectorAll('.btn-delete-booking').forEach(btn => {
+                btn.onclick = (e) => {
+                    const id = e.target.dataset.id;
+                    const booking = allBookings.find(b => b.id === id);
+                    
+                    // Allow deletion if the user ID matches the booker ID
+                    if (booking.bookerId === userId) {
+                        if (confirm("Are you sure you want to delete this booking?")) {
+                            deleteBooking(id, booking);
+                        }
+                    } else {
+                        showToast("You can only delete your own bookings.", true);
                     }
-                } else {
-                    showToast("You can only delete your own bookings.", true);
-                }
-            }
+                };
+            });
         }
         
-        async function deleteBooking(id, booking) {
-            const bookingDoc = doc(db, `/artifacts/${appId}/public/data/bookings`, id);
-            try {
-                await deleteDoc(bookingDoc);
-                await createLogEntry(`Deleted booking for ${booking.resourceName} at ${formatTimestamp(booking.startTime)}`);
+        function deleteBooking(id, booking) {
+            const index = allBookings.findIndex(b => b.id === id);
+            if (index > -1) {
+                allBookings.splice(index, 1);
+                
+                saveData();
+                createLogEntry(`Deleted booking for ${booking.resourceName} at ${formatTimestamp(booking.startTime)}`);
                 showToast("Booking deleted successfully.");
-            } catch (error) {
-                console.error("Error deleting booking:", error);
-                showToast("Error deleting booking.", true);
+                reloadDataAndRender();
             }
         }
 
@@ -637,8 +592,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
                 openModal('bookingModal');
             };
             
-            // Equipment Form
-            document.getElementById('equipmentForm').onsubmit = async (e) => {
+            // Equipment Form (Add/Edit)
+            document.getElementById('equipmentForm').onsubmit = (e) => {
                 e.preventDefault();
                 const id = document.getElementById('equipmentId').value;
                 const data = {
@@ -647,71 +602,70 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
                     type: document.getElementById('equipmentType').value,
                 };
                 
-                try {
-                    if (id) {
-                        // Update
-                        const itemDoc = doc(db, `/artifacts/${appId}/public/data/equipment`, id);
-                        await updateDoc(itemDoc, data);
-                        await createLogEntry(`Updated item: ${data.name} (SN: ${data.serialNumber})`);
+                if (id) {
+                    // Edit existing
+                    const itemIndex = allEquipment.findIndex(i => i.id === id);
+                    if (itemIndex > -1) {
+                        Object.assign(allEquipment[itemIndex], data);
+                        saveData();
+                        createLogEntry(`Updated item: ${data.name} (SN: ${data.serialNumber})`);
                         showToast("Equipment updated successfully.");
-                    } else {
-                        // Create
-                        data.status = "Available"; // Default status
-                        await addDoc(equipmentCol, data);
-                        await createLogEntry(`Added item: ${data.name} (SN: ${data.serialNumber})`);
-                        showToast("Equipment added successfully.");
                     }
-                    closeModal();
-                } catch (error) {
-                    console.error("Error saving equipment:", error);
-                    showToast("Error saving equipment.", true);
+                } else {
+                    // Create new
+                    data.id = 'equip-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+                    data.status = "Available"; 
+                    allEquipment.push(data);
+                    saveData();
+                    createLogEntry(`Added item: ${data.name} (SN: ${data.serialNumber})`);
+                    showToast("Equipment added successfully.");
                 }
+                closeModal();
+                reloadDataAndRender();
             };
             
             // Delete Equipment
-            document.getElementById('deleteEquipmentBtn').onclick = async () => {
+            document.getElementById('deleteEquipmentBtn').onclick = () => {
                 const id = document.getElementById('equipmentId').value;
                 const item = allEquipment.find(i => i.id === id);
                 if (confirm(`Are you sure you want to delete ${item.name}? This action cannot be undone.`)) {
-                    const itemDoc = doc(db, `/artifacts/${appId}/public/data/equipment`, id);
-                    try {
-                        await deleteDoc(itemDoc);
-                        await createLogEntry(`Deleted item: ${item.name} (SN: ${item.serialNumber})`);
+                    const itemIndex = allEquipment.findIndex(i => i.id === id);
+                    if (itemIndex > -1) {
+                        allEquipment.splice(itemIndex, 1);
+                        saveData();
+                        createLogEntry(`Deleted item: ${item.name} (SN: ${item.serialNumber})`);
                         showToast("Equipment deleted successfully.");
                         closeModal();
-                    } catch (error) {
-                        console.error("Error deleting equipment:", error);
-                        showToast("Error deleting equipment.", true);
+                        reloadDataAndRender();
                     }
                 }
             };
             
             // Assign Form
-            document.getElementById('assignForm').onsubmit = async (e) => {
+            document.getElementById('assignForm').onsubmit = (e) => {
                 e.preventDefault();
                 const id = document.getElementById('assignEquipmentId').value;
                 const name = document.getElementById('assigneeName').value;
-                const item = allEquipment.find(i => i.id === id);
                 
-                const itemDoc = doc(db, `/artifacts/${appId}/public/data/equipment`, id);
-                try {
-                    await updateDoc(itemDoc, {
-                        status: "Assigned",
-                        assigneeName: name,
-                        assigneeId: userId, // Log the ID of the user *doing* the assigning
-                        lastCheckedOut: Timestamp.now()
-                    });
-                    await createLogEntry(`Assigned item: ${item.name} to ${name}`);
+                const itemIndex = allEquipment.findIndex(i => i.id === id);
+                
+                if (itemIndex > -1) {
+                    const item = allEquipment[itemIndex];
+                    item.status = "Assigned";
+                    item.assigneeName = name;
+                    item.assigneeId = userId;
+                    item.lastCheckedOut = Date.now();
+                    
+                    saveData();
+                    createLogEntry(`Assigned item: ${item.name} to ${name}`);
                     showToast("Item assigned successfully.");
                     closeModal();
-                } catch (error) {
-                    console.error("Error assigning item:", error);
-                    showToast("Error assigning item.", true);
+                    reloadDataAndRender();
                 }
             };
             
             // Booking Form
-            document.getElementById('bookingForm').onsubmit = async (e) => {
+            document.getElementById('bookingForm').onsubmit = (e) => {
                 e.preventDefault();
                 const resourceId = document.getElementById('bookingResource').value;
                 const date = document.getElementById('bookingDate').value;
@@ -727,21 +681,21 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
                 const endDate = new Date(date);
                 endDate.setHours(endHour, endMin, 0, 0);
                 
-                if (endDate <= startDate) {
+                if (endDate.getTime() <= startDate.getTime()) {
                     showToast("End time must be after start time.", true);
                     return;
                 }
                 
-                // Check for conflicts
-                const startTs = Timestamp.fromDate(startDate);
-                const endTs = Timestamp.fromDate(endDate);
+                const startMs = startDate.getTime();
+                const endMs = endDate.getTime();
                 
+                // Check for conflicts
                 const conflict = allBookings.find(b =>
                     b.resourceId === resourceId &&
                     (
-                        (b.startTime <= startTs && b.endTime > startTs) || // New booking starts during existing one
-                        (b.startTime < endTs && b.endTime >= endTs) ||     // New booking ends during existing one
-                        (b.startTime >= startTs && b.endTime <= endTs)    // New booking surrounds existing one
+                        (b.startTime <= startMs && b.endTime > startMs) || 
+                        (b.startTime < endMs && b.endTime >= endMs) ||     
+                        (b.startTime >= startMs && b.endTime <= endMs)    
                     )
                 );
                 
@@ -750,108 +704,40 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
                     return;
                 }
                 
-                try {
-                    await addDoc(bookingsCol, {
-                        resourceId: resourceId,
-                        resourceName: resourceId === 'Computer-1' ? "Workstation Alpha" : "Workstation Beta",
-                        startTime: startTs,
-                        endTime: endTs,
-                        bookerName: userName || userId.substring(0, 8),
-                        bookerId: userId
-                    });
-                    await createLogEntry(`Booked ${resourceId} from ${formatTimestamp(startDate)} to ${formatTimestamp(endDate)}`);
-                    showToast("Resource booked successfully.");
-                    closeModal();
-                } catch (error) {
-                    console.error("Error creating booking:", error);
-                    showToast("Error creating booking.", true);
-                }
+                // Create booking
+                allBookings.push({
+                    id: 'book-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                    resourceId: resourceId,
+                    resourceName: resourceId === 'Computer-1' ? "Workstation Alpha" : "Workstation Beta",
+                    startTime: startMs,
+                    endTime: endMs,
+                    bookerName: userName,
+                    bookerId: userId
+                });
+                
+                saveData();
+                createLogEntry(`Booked ${resourceId} from ${formatTimestamp(startDate)} to ${formatTimestamp(endDate)}`);
+                showToast("Resource booked successfully.");
+                closeModal();
+                reloadDataAndRender();
             };
             
             // Booking date navigation
             document.getElementById('prevDayBtn').onclick = () => {
                 currentBookingDate.setDate(currentBookingDate.getDate() - 1);
-                renderBookingSchedule();
+                reloadDataAndRender();
             };
             document.getElementById('nextDayBtn').onclick = () => {
                 currentBookingDate.setDate(currentBookingDate.getDate() + 1);
-                renderBookingSchedule();
+                reloadDataAndRender();
             };
-            
-            // Booking schedule clicks
-            attachBookingScheduleListeners();
         }
 
-        // --- INITIALIZATION ---
-        async function initializeAppAndAuth() {
-            // Check for explicit error message from config failure
-            if (document.body.innerHTML.includes("Authentication Error: Missing Firebase Credentials")) {
-                return;
-            }
-
-            try {
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-                setLogLevel('Debug'); // Enable Firestore logging
-                
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        // Use a fallback name for Anonymous users
-                        userName = user.displayName || user.email || (user.isAnonymous ? "Anon-" + userId.substring(0, 8) : userId.substring(0, 8));
-                        document.getElementById('userIdDisplay').textContent = userId;
-                        
-                        // User is authenticated, safe to initialize Firestore listeners
-                        initSnapshotListeners();
-                        
-                    } else {
-                        // User is signed out. Clear sensitive data.
-                        userId = null;
-                        document.getElementById('userIdDisplay').textContent = "Not signed in";
-                        
-                        // Detach listeners and clear data
-                        if (unsubEquipment) unsubEquipment();
-                        if (unsubBookings) unsubBookings();
-                        if (unsubLogs) unsubLogs();
-                        
-                        allEquipment = [];
-                        allBookings = [];
-                        allLogs = [];
-                        
-                        renderEquipmentTable();
-                        renderLogsTable();
-                        renderBookingSchedule();
-                        renderDashboardStats();
-                    }
-                });
-                
-                // SIGN-IN FIX: Use the special token if provided (Canvas), otherwise sign in anonymously (VS Code/local)
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                
-                showToast("Signed in anonymously. You can now use the dashboard.");
-
-            } catch (error) {
-                console.error("Firebase initialization error:", error);
-                document.body.innerHTML = `
-                    <div class="p-10 bg-red-100 text-red-800 border-l-4 border-red-500 m-8 rounded-lg shadow-lg">
-                        <h1 class="text-2xl font-bold mb-4">Firebase Initialization Error</h1>
-                        <p class="mb-2">There was an error connecting to Firebase. Please ensure your <code>firebaseConfig</code> (especially <code>apiKey</code>) is correct and your Firestore security rules allow anonymous reads/writes.</p>
-                        <p class="font-semibold">Error Message: ${error.message}</p>
-                    </div>
-                `;
-            }
-        }
-        
         // --- APP START ---
         document.addEventListener('DOMContentLoaded', () => {
             applyTailwindStyles();
+            getLocalUserId();
             setupNavigation();
             setupEventListeners();
-            renderBookingSchedule(); // Initial render with current date
-            initializeAppAndAuth();
+            reloadDataAndRender(); 
         });
